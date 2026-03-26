@@ -1,0 +1,280 @@
+// GUIA DE IMPLEMENTAÇÃO - Módulo de Câmera Profissional
+
+// ============================================================================
+// 1. DETECÇÃO DE BORDAS EM TEMPO REAL (500ms loop)
+// ============================================================================
+
+CameraScreen: useEffect(() => {
+  detectionInterval = setInterval(async () => {
+    // Simula análise de video frame
+    const corners = await detectDocumentEdges('', FRAME_W, FRAME_H);
+    
+    if (corners) {
+      setDetectedCorners(corners);  // Atualiza posição dos 4 cantos
+      const stable = isDocumentStable(corners); // Verifica estabilidade
+      setIsStable(stable); // Muda cor visual
+    }
+  }, 500); // A cada 500ms
+}, []);
+
+// ============================================================================
+// 2. OVERLAY VISUAL - FEEDBACK EM TEMPO REAL
+// ============================================================================
+
+<EdgeDetectionOverlay
+  corners={{
+    topLeft: { x: ..., y: ... },
+    topRight: { x: ..., y: ... },
+    bottomLeft: { x: ..., y: ... },
+    bottomRight: { x: ..., y: ... },
+  }}
+  isStable={isStable}  // Muda cor: Branco→Verde
+/>
+
+// Renderiza:
+// - Quadrilátero dinâmico (2-3px stroke)
+// - 4 círculos nos cantos (8-12px raio, pulsa quando estável)
+// - Indicador: "✓ Pronto para capturar" ou "⊘ Mova para enquadramento"
+// - Setas de direção (↖↗↙↘) quando instável
+
+
+// ============================================================================
+// 3. CAPTURA MANUAL (Shutter Button)
+// ============================================================================
+
+async function capture() {
+  const photo = await cameraRef.current.takePictureAsync({
+    quality: 0.95,
+    base64: false,
+  });
+  
+  // Redimensiona para processing
+  const resized = await ImageManipulator.manipulateAsync(photo.uri, [
+    { resize: { width: 1240 } },
+  ]);
+  
+  // Navega para crop com corners detectados
+  navigation.navigate('CropAdjustment', {
+    imageUri: resized.uri,
+    initialCorners: detectedCorners,  // Passa corners auto-detectados
+  });
+}
+
+
+// ============================================================================
+// 4. CROP INTERATIVO COM MAGNIFIER
+// ============================================================================
+
+CropAdjustmentScreen:
+
+<PanResponder> 
+  // Detecta toque em corner (raio 50px)
+  onStartShouldSetPanResponder: (evt) => {
+    const point = { x: evt.nativeEvent.locationX, y: evt.nativeEvent.locationY };
+    for (const key of ['topLeft', 'topRight', 'bottomLeft', 'bottomRight']) {
+      if (isPointNear(point, corners[key], 50)) {
+        setDraggingCorner(key);  // Marca corner como selecionado
+        return true;
+      }
+    }
+  },
+  
+  onPanResponderMove: (evt) => {
+    // Atualiza posição do corner conforme arrasta
+    const newPoint = {
+      x: Math.max(0, Math.min(width, evt.nativeEvent.locationX)),
+      y: Math.max(0, Math.min(height, evt.nativeEvent.locationY)),
+    };
+    setCorners(prev => ({...prev, [draggingCorner]: newPoint}));
+    setMagnifierPos(newPoint);  // Mostra magnifier
+  },
+  
+  onPanResponderRelease: () => {
+    setDraggingCorner(null);  // Esconde magnifier
+  }
+/>
+
+// Magnifier (Lupa):
+{magnifierPos && draggingCorner && (
+  <View style={{width: 100, height: 100, borderRadius: 50}}>
+    <Image 
+      source={{uri: imageUri}}
+      style={{
+        width: width * 3,  // 3x zoom
+        height: height * 3,
+        marginLeft: -magnifierPos.x * 3 + 50,
+        marginTop: -magnifierPos.y * 3 + 50,
+      }}
+    />
+    <View style={{...Crosshair}}/>  {/* Cruz no centro */}
+  </View>
+)}
+
+
+// ============================================================================
+// 5. PROCESSAMENTO DE IMAGEM
+// ============================================================================
+
+async function handleApply() {
+  // 1. Perspective Transform (estica documento)
+  const transformedUri = await applyPerspectiveTransform(
+    imageUri,
+    corners,  // 4 pontos ajustados pelo usuário
+    1240,     // Largura padrão A4
+    1754      // Altura padrão A4
+  );
+  
+  // 2. Magic Color Filter (aumenta contraste)
+  const enhancedUri = await applyMagicColorFilter(transformedUri);
+  
+  // 3. Salva como página
+  const page: ScannedPage = {
+    id: generateId(),
+    uri: enhancedUri,
+    filter: 'auto',
+    rotation: 0,
+    createdAt: Date.now(),
+  };
+  
+  addScanPage(page);
+  
+  // 4. Retorna para câmera
+  navigation.navigate('Camera');
+}
+
+
+// ============================================================================
+// 6. FUNÇÕES AUXILIARES
+// ============================================================================
+
+// Detecta estabilidade (todos os 4 lados formam retângulo?)
+isDocumentStable(corners): boolean {
+  topEdge = corners.topRight.x - corners.topLeft.x;
+  bottomEdge = corners.bottomRight.x - corners.bottomLeft.x;
+  leftEdge = corners.bottomLeft.y - corners.topLeft.y;
+  rightEdge = corners.bottomRight.y - corners.topRight.y;
+  
+  // Verifica se diferença < 5%
+  return Math.abs(topEdge - bottomEdge) / topEdge < 0.05 &&
+         Math.abs(leftEdge - rightEdge) / leftEdge < 0.05;
+}
+
+// Distância entre dois pontos (para detecção de toque)
+distance(p1, p2): number {
+  return Math.sqrt((p2.x - p1.x)² + (p2.y - p1.y)²);
+}
+
+isPointNear(point, target, radius = 40): boolean {
+  return distance(point, target) < radius;
+}
+
+
+// ============================================================================
+// 7. ANIMAÇÕES
+// ============================================================================
+
+// Pulso nos corners quando estável
+Animated.loop(
+  Animated.sequence([
+    Animated.timing(pulseAnim, { toValue: 1.1, duration: 600 }),
+    Animated.timing(pulseAnim, { toValue: 1, duration: 600 }),
+  ])
+).start();
+
+// Interpretação: 1px → 1.1px (cresce/encolhe)
+cornerSize = pulseAnim.interpolate({
+  inputRange: [1, 1.1],
+  outputRange: [8, 12],
+});
+
+// Flash ao capturar
+Animated.sequence([
+  Animated.timing(flashAnim, { toValue: 1, duration: 80 }),
+  Animated.timing(flashAnim, { toValue: 0, duration: 200 }),
+]).start();
+
+
+// ============================================================================
+// 8. PROPÓSITO DE CADA ARQUIVO
+// ============================================================================
+
+src/screens/CameraScreen.tsx (200 linhas)
+│
+├─ useEffect: Detección contínua de bordas
+├─ capture(): Tira foto manual → vai para Crop
+├─ handleDone(): Vai para Editor se tem páginas
+├─ handleClose(): Volta com opção de descartar
+└─ EdgeDetectionOverlay: Renderiza feedback visual
+
+src/screens/CropAdjustmentScreen.tsx (280 linhas)
+│
+├─ PanResponder: Gerencia drag dos 4 corners
+├─ Magnifier: Mostra zoom 3x ao arrastar
+├─ handleApply(): Aplica transformações e salva
+└─ Emulate 4-point perspective transform
+
+src/components/EdgeDetectionOverlay.tsx (140 linhas)
+│
+├─ Renderiza 4 linhas (quadrilátero)
+├─ Renderiza 4 círculos nos cantos (animados)
+├─ Indicador de estabilidade com texto
+└─ Setas de direção quando instável
+
+src/utils/imageProcessing.ts (200 linhas)
+│
+├─ detectDocumentEdges(): Simula detecção
+├─ isDocumentStable(): Verifica estabilidade
+├─ applyPerspectiveTransform(): Estica documento
+├─ applyMagicColorFilter(): Aumenta contraste
+├─ applyBlackAndWhiteFilter(): Converte para B&W
+├─ distance(): Calcula distância entre pontos
+└─ isPointNear(): Detecta toque em área
+
+src/navigation/AppNavigator.tsx
+│
+└─ Adiciona rota: CropAdjustment (fullScreenModal)
+
+
+// ============================================================================
+// 9. FLUXO COMPLETO EM PSEUDOCÓDIGO
+// ============================================================================
+
+FLUXO = [
+  1. Usuário entra em CameraScreen
+  2. Edge detection inicia (loop 500ms)
+  3. Quadrilátero aparece, muda cor conforme estabilidade
+  4. Usuário enquadra documento
+  5. Quadrilátero fica verde, texto muda para "✓ Pronto"
+  6. Usuário clica no botão Shutter (círculo branco)
+  7. Foto é capturada, redimensionada para 1240px
+  8. Navega para CropAdjustmentScreen com foto + corners detectados
+  9. Usuário vê foto com 4 âncoras
+  10. Usuário arrasta um canto (magnifier aparece)
+  11. Usuário ajusta todos os 4 cantos
+  12. Clica "Aplicar"
+  13. Perspective transform + Magic Color Filter aplicados
+  14. Página salva no store
+  15. Volta para CameraScreen
+  16. Usuário pode capturar mais páginas ou ir para Editor
+]
+
+
+// ============================================================================
+// 10. PRÓXIMA INTEGRAÇÃO: ML KIT (Opcional)
+// ============================================================================
+
+// Para detecção AUTOMÁTICA de bordas (mais precis que simulado):
+
+import { MLKitDocumentScanning } from '@react-native-ml-kit/document-scanner';
+
+const detectedResult = await MLKitDocumentScanning.scanDocument(photo.uri);
+// detectedResult = {
+//   success: true,
+//   corners: [{x, y}, ...],  // 4 corners auto-detectados
+//   confidence: 0.95,        // Confiança 0-1
+// }
+
+// Aí troca:
+const corners = await detectDocumentEdges(...);
+// Por:
+const { corners } = await MLKitDocumentScanning.scanDocument(photo.uri);

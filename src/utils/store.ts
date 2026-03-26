@@ -38,53 +38,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  documents: [
-    {
-      id: '1',
-      name: 'Contrato de Trabalho',
-      pages: [],
-      createdAt: Date.now() - 86400000,
-      updatedAt: Date.now() - 3600000,
-      size: 2457600,
-      pageCount: 3,
-    },
-    {
-      id: '2',
-      name: 'Nota Fiscal Compra',
-      pages: [],
-      createdAt: Date.now() - 172800000,
-      updatedAt: Date.now() - 172800000,
-      size: 876544,
-      pageCount: 1,
-    },
-    {
-      id: '3',
-      name: 'Relatório Mensal',
-      pages: [],
-      createdAt: Date.now() - 950400000,
-      updatedAt: Date.now() - 950400000,
-      size: 5345280,
-      pageCount: 8,
-    },
-    {
-      id: '4',
-      name: 'Anotações Reunião',
-      pages: [],
-      createdAt: Date.now() - 1382400000,
-      updatedAt: Date.now() - 1382400000,
-      size: 1258291,
-      pageCount: 2,
-    },
-    {
-      id: '5',
-      name: 'Certidão de Nascimento',
-      pages: [],
-      createdAt: Date.now() - 2592000000,
-      updatedAt: Date.now() - 2592000000,
-      size: 430080,
-      pageCount: 1,
-    },
-  ],
+  documents: [],
   currentDoc: null,
   scanPages: [],
 

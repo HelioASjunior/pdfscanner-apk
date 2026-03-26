@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Switch, Alert, StatusBar,
+  StyleSheet, Switch, Alert, StatusBar, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, Radius, FontSize, FontWeight } from '../utils/theme';
 import { useAppStore } from '../utils/store';
 import { formatBytes } from '../utils/helpers';
 
 export default function SettingsScreen() {
+  const navigation = useNavigation<any>();
   const { documents } = useAppStore();
   const [autoDetect, setAutoDetect] = useState(true);
   const [autoOCR, setAutoOCR] = useState(false);
@@ -68,33 +70,6 @@ export default function SettingsScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
       <ScrollView showsVerticalScrollIndicator={false}>
         <Text style={styles.pageTitle}>Configurações</Text>
-
-        {/* Profile */}
-        <TouchableOpacity style={styles.profileCard} onPress={() => Alert.alert('Perfil', 'Gerenciar conta')}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>JS</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.profileName}>João Silva</Text>
-            <Text style={styles.profileEmail}>joao@email.com</Text>
-          </View>
-          <View style={styles.planBadge}>
-            <Text style={styles.planBadgeText}>Gratuito</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Upgrade */}
-        <TouchableOpacity
-          style={styles.upgradeCard}
-          onPress={() => Alert.alert('Pro', 'Upgrade para o plano Pro!')}
-        >
-          <Text style={{ fontSize: 20 }}>✨</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.upgradeTitle}>Upgrade para Pro</Text>
-            <Text style={styles.upgradeDesc}>OCR ilimitado • Sem anúncios • 50 GB na nuvem</Text>
-          </View>
-          <Text style={{ color: Colors.accent2, fontSize: 18 }}>›</Text>
-        </TouchableOpacity>
 
         {/* Scan settings */}
         <SectionHeader title="Digitalização" />
@@ -172,18 +147,13 @@ export default function SettingsScreen() {
           <Row icon="ℹ️" title="Versão" rightLabel="1.0.0" />
           <Divider />
           <Row
-            icon="⭐" title="Avaliar o app"
-            onPress={() => Alert.alert('Obrigado!', 'Avalie-nos na Play Store!')}
-          />
-          <Divider />
-          <Row
             icon="📧" title="Suporte"
-            onPress={() => Alert.alert('Suporte', 'suporte@scanpdf.app')}
+            onPress={() => Linking.openURL('mailto:pythontrainer96@gmail.com')}
           />
           <Divider />
           <Row
             icon="📜" title="Política de privacidade"
-            onPress={() => Alert.alert('Política', 'Ver política de privacidade...')}
+            onPress={() => navigation.navigate('PrivacyPolicy')}
           />
         </View>
 
@@ -201,35 +171,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xxl, paddingTop: Spacing.md, paddingBottom: Spacing.lg,
   },
 
-  profileCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    marginHorizontal: Spacing.xxl, marginBottom: Spacing.md,
-    backgroundColor: Colors.surface, borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)', borderRadius: Radius.lg, padding: Spacing.md,
-  },
-  avatar: {
-    width: 46, height: 46, borderRadius: 23,
-    backgroundColor: Colors.accent,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  avatarText: { fontSize: 16, fontWeight: FontWeight.bold, color: '#fff' },
-  profileName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.text },
-  profileEmail: { fontSize: FontSize.sm, color: Colors.text2, marginTop: 2 },
-  planBadge: {
-    backgroundColor: Colors.surface3, paddingHorizontal: 10,
-    paddingVertical: 4, borderRadius: 20,
-  },
-  planBadgeText: { fontSize: FontSize.sm, color: Colors.text2, fontWeight: '600' },
-
-  upgradeCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    marginHorizontal: Spacing.xxl, marginBottom: Spacing.xxl,
-    backgroundColor: 'rgba(108,99,255,0.15)',
-    borderWidth: 1, borderColor: 'rgba(108,99,255,0.3)',
-    borderRadius: Radius.lg, padding: Spacing.md,
-  },
-  upgradeTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.accent2 },
-  upgradeDesc: { fontSize: FontSize.sm, color: Colors.text2, marginTop: 2 },
+  profileCard: { display: 'none' },
+  avatar: { display: 'none' },
+  avatarText: {},
+  profileName: {},
+  profileEmail: {},
+  planBadge: { display: 'none' },
+  planBadgeText: {},
+  upgradeCard: { display: 'none' },
 
   sectionHeader: {
     paddingHorizontal: Spacing.xxl, paddingBottom: Spacing.sm,

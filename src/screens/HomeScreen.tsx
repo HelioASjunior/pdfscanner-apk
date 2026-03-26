@@ -46,9 +46,6 @@ export default function HomeScreen() {
             </Text>
             <Text style={styles.appSub}>Digitalize qualquer documento</Text>
           </View>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>JS</Text>
-          </View>
         </View>
 
         {/* Search */}
@@ -110,6 +107,13 @@ export default function HomeScreen() {
 
         {/* Recent */}
         <Text style={styles.sectionTitle}>Documentos recentes</Text>
+        {recent.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>📄</Text>
+            <Text style={styles.emptyText}>Nenhum documento ainda</Text>
+            <Text style={styles.emptyDesc}>Escaneie seu primeiro documento para começar</Text>
+          </View>
+        ) : (
         <View style={styles.docList}>
           {recent.map((doc) => (
             <TouchableOpacity
@@ -146,6 +150,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
         </View>
+        )}
 
         <View style={{ height: 20 }} />
       </ScrollView>
@@ -164,11 +169,6 @@ const styles = StyleSheet.create({
   },
   appTitle: { fontSize: FontSize.xxxl, fontWeight: FontWeight.bold, color: Colors.text, letterSpacing: -0.5 },
   appSub: { fontSize: FontSize.sm, color: Colors.text3, marginTop: 2 },
-  avatar: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center',
-  },
-  avatarText: { fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white },
 
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
@@ -241,5 +241,18 @@ const styles = StyleSheet.create({
   docActionBtn: {
     width: 32, height: 32, backgroundColor: Colors.surface3,
     borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center',
+  },
+
+  emptyState: {
+    alignItems: 'center', paddingVertical: 40,
+    paddingHorizontal: Spacing.xxl,
+  },
+  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyText: {
+    fontSize: FontSize.md, fontWeight: FontWeight.semibold,
+    color: Colors.text2, marginBottom: 6,
+  },
+  emptyDesc: {
+    fontSize: FontSize.sm, color: Colors.text3, textAlign: 'center', lineHeight: 20,
   },
 });

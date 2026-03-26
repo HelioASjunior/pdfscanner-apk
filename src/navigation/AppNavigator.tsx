@@ -10,6 +10,8 @@ import DocumentsScreen from '../screens/DocumentsScreen';
 import CameraScreen from '../screens/CameraScreen';
 import EditorScreen from '../screens/EditorScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import CropAdjustmentScreen from '../screens/CropAdjustmentScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -105,8 +107,18 @@ export default function AppNavigator() {
           options={{ presentation: 'fullScreenModal' }}
         />
         <Stack.Screen
+          name="CropAdjustment"
+          component={CropAdjustmentScreen}
+          options={{ presentation: 'fullScreenModal' }}
+        />
+        <Stack.Screen
           name="Editor"
           component={EditorScreen}
+          options={{ presentation: 'card' }}
+        />
+        <Stack.Screen
+          name="PrivacyPolicy"
+          component={PrivacyPolicyScreen}
           options={{ presentation: 'card' }}
         />
       </Stack.Navigator>

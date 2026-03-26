@@ -1,97 +1,123 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Alert, Dimensions, Animated, Easing,
+  Alert, Dimensions, Animated,
 } from 'react-native';
-import { CameraView, useCameraPermissions, CameraType } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Image } from 'react-native';
 import { Colors, Spacing, Radius } from '../utils/theme';
-import { useAppStore, ScannedPage } from '../utils/store';
-import { generateId } from '../utils/helpers';
+import { useAppStore } from '../utils/store';
+import {
+  detectDocumentEdges,
+  isDocumentStable,
+  DocumentCorners,
+} from '../utils/imageProcessing';
+import { EdgeDetectionOverlay } from '../components/EdgeDetectionOverlay';
 
 const { width, height } = Dimensions.get('window');
+
+const TOP_BAR_H = 80;
+const BOTTOM_BAR_H = 130;
+const FRAME_W = width * 0.78;
+const FRAME_H = FRAME_W * 1.35;
 
 export default function CameraScreen() {
   const navigation = useNavigation<any>();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
-  const { scanPages, addScanPage, clearScanPages } = useAppStore();
+  const { scanPages, clearScanPages } = useAppStore();
+
   const [flashMode, setFlashMode] = useState<'off' | 'on' | 'auto'>('off');
   const [isCapturing, setIsCapturing] = useState(false);
   const [selectedPage, setSelectedPage] = useState<number>(0);
-  const scanAnim = useRef(new Animated.Value(0)).current;
-  const flashAnim = useRef(new Animated.Value(0)).current;
-
-  // Scan line animation
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(scanAnim, {
-          toValue: 1, duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scanAnim, {
-          toValue: 0, duration: 0,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, []);
-
-  const scanLineTranslate = scanAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 300],
+  const [detectedCorners, setDetectedCorners] = useState<DocumentCorners>({
+    topLeft: { x: FRAME_W * 0.1, y: FRAME_H * 0.1 },
+    topRight: { x: FRAME_W * 0.9, y: FRAME_H * 0.1 },
+    bottomLeft: { x: FRAME_W * 0.1, y: FRAME_H * 0.9 },
+    bottomRight: { x: FRAME_W * 0.9, y: FRAME_H * 0.9 },
   });
+  const [isStable, setIsStable] = useState(false);
+
+  const flashAnim = useRef(new Animated.Value(0)).current;
+  const detectionInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Continuous edge detection loop
+  useEffect(() => {
+    detectionInterval.current = setInterval(async () => {
+      if (!cameraRef.current) return;
+      try {
+        const corners = await detectDocumentEdges('', FRAME_W, FRAME_H);
+        if (corners) {
+          setDetectedCorners(corners);
+          const stable = isDocumentStable(corners);
+          setIsStable(stable);
+        }
+      } catch (error) {
+        // Edge detection fallback
+      }
+    }, 500);
+
+    return () => {
+      if (detectionInterval.current) {
+        clearInterval(detectionInterval.current);
+      }
+    };
+  }, []);
 
   async function capture() {
     if (!cameraRef.current || isCapturing) return;
     setIsCapturing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Flash effect
     Animated.sequence([
-      Animated.timing(flashAnim, { toValue: 1, duration: 80, useNativeDriver: true }),
-      Animated.timing(flashAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(flashAnim, {
+        toValue: 1,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(flashAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
     ]).start();
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, base64: false });
-      if (!photo) return;
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.95,
+        base64: false,
+      });
 
-      // Auto-enhance for document scanning
-      const manipulated = await ImageManipulator.manipulateAsync(
-        photo.uri,
-        [{ resize: { width: 1240 } }],
-        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-      );
+      if (!photo) {
+        throw new Error('Photo is null');
+      }
 
-      const page: ScannedPage = {
-        id: generateId(),
-        uri: manipulated.uri,
-        filter: 'auto',
-        rotation: 0,
-        createdAt: Date.now(),
-      };
+      const resized = await ImageManipulator.manipulateAsync(photo.uri, [
+        { resize: { width: 1240 } },
+      ]);
 
-      addScanPage(page);
-      setSelectedPage(scanPages.length);
-    } catch (e) {
+      // Navigate to crop adjustment
+      navigation.navigate('CropAdjustment', {
+        imageUri: resized.uri,
+        initialCorners: detectedCorners,
+      });
+    } catch (error) {
+      console.error('Capture error:', error);
       Alert.alert('Erro', 'Não foi possível capturar a foto.');
-    } finally {
       setIsCapturing(false);
     }
   }
 
   function handleDone() {
     if (scanPages.length === 0) {
-      Alert.alert('Atenção', 'Capture pelo menos uma página antes de continuar.');
+      Alert.alert(
+        'Atenção',
+        'Capture pelo menos uma página antes de continuar.'
+      );
       return;
     }
     navigation.navigate('Editor');
@@ -105,8 +131,12 @@ export default function CameraScreen() {
         [
           { text: 'Continuar escaneando', style: 'cancel' },
           {
-            text: 'Descartar', style: 'destructive',
-            onPress: () => { clearScanPages(); navigation.goBack(); }
+            text: 'Descartar',
+            style: 'destructive',
+            onPress: () => {
+              clearScanPages();
+              navigation.goBack();
+            },
           },
         ]
       );
@@ -121,9 +151,6 @@ export default function CameraScreen() {
     setFlashMode(next);
     Haptics.selectionAsync();
   }
-
-  const flashIcons = { off: '⚡', on: '⚡', auto: '⚡' };
-  const flashLabels = { off: 'Desligado', on: 'Ligado', auto: 'Auto' };
 
   if (!permission) return <View style={styles.container} />;
 
@@ -144,7 +171,6 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Camera */}
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
@@ -152,10 +178,8 @@ export default function CameraScreen() {
         flash={flashMode}
       />
 
-      {/* Flash overlay */}
       <Animated.View style={[styles.flashOverlay, { opacity: flashAnim }]} />
 
-      {/* Top bar */}
       <SafeAreaView style={styles.topBar}>
         <TouchableOpacity style={styles.iconBtn} onPress={handleClose}>
           <Text style={styles.iconBtnText}>✕</Text>
@@ -173,25 +197,36 @@ export default function CameraScreen() {
         </TouchableOpacity>
       </SafeAreaView>
 
-      {/* Scan frame overlay */}
-      <View style={styles.frameContainer} pointerEvents="none">
-        <View style={styles.scanFrame}>
-          {/* Corners */}
-          <View style={[styles.corner, styles.cornerTL]} />
-          <View style={[styles.corner, styles.cornerTR]} />
-          <View style={[styles.corner, styles.cornerBL]} />
-          <View style={[styles.corner, styles.cornerBR]} />
-
-          {/* Animated scan line */}
-          <Animated.View style={[
-            styles.scanLine,
-            { transform: [{ translateY: scanLineTranslate }] }
-          ]} />
-        </View>
-        <Text style={styles.frameHint}>Posicione o documento dentro do quadro</Text>
+      <View
+        style={[
+          styles.frameContainer,
+          { top: TOP_BAR_H, bottom: BOTTOM_BAR_H },
+        ]}
+        pointerEvents="none"
+      >
+        <EdgeDetectionOverlay
+          corners={{
+            topLeft: {
+              x: detectedCorners.topLeft.x + (width - FRAME_W) / 2,
+              y: detectedCorners.topLeft.y + TOP_BAR_H,
+            },
+            topRight: {
+              x: detectedCorners.topRight.x + (width - FRAME_W) / 2,
+              y: detectedCorners.topRight.y + TOP_BAR_H,
+            },
+            bottomLeft: {
+              x: detectedCorners.bottomLeft.x + (width - FRAME_W) / 2,
+              y: detectedCorners.bottomLeft.y + TOP_BAR_H,
+            },
+            bottomRight: {
+              x: detectedCorners.bottomRight.x + (width - FRAME_W) / 2,
+              y: detectedCorners.bottomRight.y + TOP_BAR_H,
+            },
+          }}
+          isStable={isStable}
+        />
       </View>
 
-      {/* Thumbnail strip */}
       {scanPages.length > 0 && (
         <View style={styles.thumbStrip}>
           {scanPages.map((page, idx) => (
@@ -207,17 +242,20 @@ export default function CameraScreen() {
         </View>
       )}
 
-      {/* Bottom toolbar */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.toolBtn}
-          onPress={() => Alert.alert('Modo', 'Selecione o modo de captura:\n• Auto\n• Documento\n• Foto')}
+          onPress={() =>
+            Alert.alert(
+              'Modo',
+              'Selecione o modo de captura:\n• Automático\n• Documento\n• Foto'
+            )
+          }
         >
           <Text style={styles.toolBtnText}>🎨</Text>
           <Text style={styles.toolBtnLabel}>Modo</Text>
         </TouchableOpacity>
 
-        {/* Shutter */}
         <TouchableOpacity
           style={[styles.shutter, isCapturing && styles.shutterActive]}
           onPress={capture}
@@ -226,10 +264,7 @@ export default function CameraScreen() {
           <View style={styles.shutterInner} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.toolBtn}
-          onPress={handleDone}
-        >
+        <TouchableOpacity style={styles.toolBtn} onPress={handleDone}>
           <Text style={styles.toolBtnText}>✅</Text>
           <Text style={styles.toolBtnLabel}>Pronto</Text>
         </TouchableOpacity>
@@ -237,9 +272,6 @@ export default function CameraScreen() {
     </View>
   );
 }
-
-const FRAME_W = width * 0.78;
-const FRAME_H = FRAME_W * 1.35;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
@@ -280,28 +312,11 @@ const styles = StyleSheet.create({
   pageCountText: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
   frameContainer: {
-    position: 'absolute', inset: 0,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  scanFrame: {
-    width: FRAME_W, height: FRAME_H,
-    position: 'relative', overflow: 'hidden',
-  },
-  corner: {
-    position: 'absolute', width: 28, height: 28,
-    borderColor: Colors.accent2, borderStyle: 'solid',
-  },
-  cornerTL: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 4 },
-  cornerTR: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 4 },
-  cornerBL: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 4 },
-  cornerBR: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 4 },
-  scanLine: {
-    position: 'absolute', left: 0, right: 0, height: 2,
-    backgroundColor: Colors.accent2,
-    shadowColor: Colors.accent2, shadowOpacity: 0.8, shadowRadius: 4,
-  },
-  frameHint: {
-    marginTop: 16, fontSize: 12, color: 'rgba(255,255,255,0.6)', textAlign: 'center',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   thumbStrip: {
@@ -324,6 +339,7 @@ const styles = StyleSheet.create({
 
   bottomBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
+    zIndex: 20,
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-around', paddingVertical: 24,
     paddingBottom: 36, backgroundColor: 'rgba(0,0,0,0.7)',
