@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "ScanPDF",
+    "slug": "scanpdf",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f0f13"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.scanpdf.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "ScanPDF precisa da câmera para digitalizar documentos.",
+        "NSPhotoLibraryUsageDescription": "ScanPDF acessa a galeria para importar imagens.",
+        "NSPhotoLibraryAddUsageDescription": "ScanPDF salva documentos na galeria."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f0f13"
+      },
+      "package": "com.scanpdf.app",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ],
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "minSdkVersion": 24
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ScanPDF precisa da câmera para digitalizar documentos."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "ScanPDF acessa suas fotos para importar documentos.",
+          "savePhotosPermission": "ScanPDF salva documentos escaneados na sua galeria.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "SEU_PROJECT_ID_AQUI"
+      }
+    }
+  }
+}
